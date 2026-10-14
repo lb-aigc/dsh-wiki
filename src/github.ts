@@ -31,16 +31,33 @@ function encodePath(path: string): string {
   return path.split('/').map((segment) => encodeURIComponent(segment)).join('/')
 }
 
-/** List every `.md` blob path under the repo (recursive tree). */
-export async function listWikiPages(repo: string, token: string, branch = 'main'): Promise<string[]> {
+/**
+ * List `.md` blob paths under the repo (recursive tree).
+ *
+ * `scope` controls what gets returned. The wiki's own schema (AGENTS.md)
+ * separates structured knowledge (`wiki/`, the agent-authored pages) from raw
+ * ingest material (`raw/`, human-only, never agent-read in the first pass).
+ * Default `wiki` returns the structured pages + the repo entry files so the
+ * agent follows "read wiki/ first, fall back to raw/ only when needed".
+ */
+export async function listWikiPages(
+  repo: string,
+  token: string,
+  scope: 'wiki' | 'all' = 'wiki',
+  branch = 'main',
+): Promise<string[]> {
   const url = `${GITHUB_API}/repos/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`
   const res = await fetch(url, { headers: headers(token), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
   if (!res.ok) throw new Error(`GitHub API ${res.status}: ${await safeText(res)}`)
   const data = (await res.json()) as TreeResponse
-  return (data.tree ?? [])
+  const pages = (data.tree ?? [])
     .filter((entry) => entry.type === 'blob' && entry.path !== undefined && entry.path.endsWith('.md'))
     .map((entry) => entry.path as string)
     .sort()
+  if (scope === 'all') return pages
+  return pages.filter(
+    (path) => path === 'AGENTS.md' || path === 'README.md' || path.startsWith('wiki/'),
+  )
 }
 
 /** Read one page's full Markdown text. */
