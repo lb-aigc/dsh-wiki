@@ -1,15 +1,15 @@
 import z from '@deepseek-ai/schemastery'
 
 /**
- * Settings namespace for the private-wiki reader. The namespace string is
- * spelled here (not imported from `@deepseek-ai/dsh-settings`) so this plugin
- * adds no host dependency edge — the settings service is provided by the
- * harness plugin tree at runtime, and the string + type shim below is all the
- * plugin needs to register.
+ * Wiki settings. 0.2.0 derives the settings namespace from the plugin entry
+ * id (`ldd-wiki`, see cordis.patch.yml) — there is NO manual
+ * `settings.register(ns, schema)` call (that API was removed in 0.2.0). The
+ * config arrives via `apply(ctx, config)`'s second argument, backed by the
+ * `config:` object in cordis.patch.yml (or the user's profile patch override).
  */
-export const WIKI_SETTINGS_NS = 'wiki'
+export const WIKI_SETTINGS_NS = 'ldd-wiki'
 
-/** Default wiki repo, `owner/name`. Overridable per device in settings.yaml. */
+/** Default wiki repo, `owner/name`. Overridable per device. */
 export const DEFAULT_REPO = 'lb-aigc/aigc-video-wiki'
 
 export interface WikiSettings {
@@ -19,32 +19,18 @@ export interface WikiSettings {
   repo?: string
 }
 
-export const WikiSettingsSchema: z<WikiSettings> = z.object({
-  token: z.string(),
-  repo: z.string(),
+/** Raw config input accepted by the schema (all optional). */
+export interface WikiConfigInput {
+  token?: string | null
+  repo?: string | null
+}
+
+export interface WikiConfig {
+  token: string
+  repo: string
+}
+
+export const WikiConfigSchema: z<WikiConfigInput, WikiConfig> = z.object({
+  token: z.string().default(''),
+  repo: z.string().default(DEFAULT_REPO),
 })
-
-/**
- * Minimal type surface of the user-settings service this plugin consumes. It
- * mirrors `@deepseek-ai/dsh-settings` (`SettingsScope` / `SettingsProvider.register`)
- * without importing that package, so the plugin compiles against the harness's
- * runtime service while the lockfile stays untouched.
- */
-export interface WikiSettingsScope<T> {
-  get(): T
-  watch(callback: (next: T, prev: T) => void | Promise<void>): () => void
-}
-
-export interface WikiSettingsProvider {
-  register<T>(
-    ns: string,
-    schema: z<T>,
-    options?: { readonly base?: Partial<T> },
-  ): WikiSettingsScope<T>
-}
-
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    settings: WikiSettingsProvider
-  }
-}

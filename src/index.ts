@@ -2,40 +2,30 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 
-import { WIKI_SETTINGS_NS, WikiSettingsSchema, DEFAULT_REPO } from './settings.ts'
+import { WikiConfigSchema, DEFAULT_REPO } from './settings.ts'
+import type { WikiConfig } from './settings.ts'
 import { listWikiPages, readWikiPage } from './github.ts'
 
 export const name = 'ldd-wiki'
-export const inject = ['tools', 'settings']
+export const inject = ['tools']
+
+export interface Config extends WikiConfig {}
+
+export const Config: z<Config, Config> = WikiConfigSchema
 
 interface ResolvedWikiConfig {
   token: string
   repo: string
 }
 
-export function apply(ctx: Context): void {
-  let resolve: (() => ResolvedWikiConfig) | undefined
-
-  ctx.inject(['settings'], (settingsCtx) => {
-    const scope = settingsCtx.settings.register(WIKI_SETTINGS_NS, WikiSettingsSchema, {
-      base: { repo: DEFAULT_REPO },
-    })
-    resolve = () => {
-      const cfg = scope.get()
-      const repo = cfg.repo && cfg.repo !== '' ? cfg.repo : DEFAULT_REPO
-      const token = cfg.token && cfg.token !== '' ? cfg.token : process.env.WIKI_TOKEN ?? ''
-      if (token === '') {
-        throw new Error('wiki 未配置访问令牌：请在 settings.yaml 的 wiki.token 填入 GitHub fine-grained PAT（或设置 WIKI_TOKEN 环境变量）')
-      }
-      return { token, repo }
-    }
-  })
-
+export function apply(ctx: Context, config: Config): void {
   const requireConfig = (): ResolvedWikiConfig => {
-    if (resolve === undefined) {
-      throw new Error('wiki 配置不可用：settings 服务未加载')
+    const repo = config.repo && config.repo !== '' ? config.repo : DEFAULT_REPO
+    const token = config.token && config.token !== '' ? config.token : process.env.WIKI_TOKEN ?? ''
+    if (token === '') {
+      throw new Error('wiki 未配置访问令牌：请在 profile 的 cordis.patch.yml 里给 ldd-wiki 条目配置 token（或设置 WIKI_TOKEN 环境变量）')
     }
-    return resolve()
+    return { token, repo }
   }
 
   const listTool = defineTool({
